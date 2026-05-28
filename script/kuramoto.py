@@ -11,7 +11,7 @@ class KURAMOTO:
         rng = np.random.default_rng()
         #self.omega = np.random.normal(0.2, 0.2, n)
         #self.omega = np.random.uniform(-0.3, 0.7, n)
-        self.omega = np.linspace(-0.3, 0.7, n)
+        self.omega = np.linspace(6.5, 8.5, n)
         self.theta = 2 * np.pi * rng.random(n)
 
     def updateDiff(self):
@@ -19,7 +19,7 @@ class KURAMOTO:
         return self.theta[np.newaxis, :] - self.theta[:, np.newaxis]
 
     def updateTheta(self, u=0):
-        d_theta = self.alpha*u + self.omega + self.k * np.sum(np.sin(self.updateDiff()), axis=1) / self.n
+        d_theta =  self.omega + self.k * np.sum(np.sin(self.updateDiff()+self.alpha*u), axis=1) / self.n
         self.theta = self.theta + self.dt * d_theta
 
     def updateK(self):

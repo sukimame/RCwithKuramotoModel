@@ -1,4 +1,4 @@
-from kuramotoRC import KURAMOTO_RC, almost_periodic
+from script.kuramotoRC_chiba import KURAMOTO_RC, almost_periodic
 import matplotlib.pyplot as plt
 import numpy as np
 

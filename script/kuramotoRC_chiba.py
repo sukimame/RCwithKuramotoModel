@@ -41,9 +41,9 @@ if __name__ == "__main__":
 
     dt = 0.01
 
-    washout = 240
-    train = 32
-    test = 32
+    washout = 1
+    train = 1
+    test = 1
     timeSec = washout + train + test # 240s for training, 32s for training, 32s for testing
     time = np.arange(0, timeSec, dt)
 

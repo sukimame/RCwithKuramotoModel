@@ -1,35 +1,38 @@
-from kuramotoRC import KURAMOTO_RC
+from kuramotoRC_Zuo import KURAMOTO_RC
 import matplotlib.pyplot as plt
 import numpy as np
+from NARMA import create_narma10_dataset
 
-def lowhighSin(t):
-    return np.sin(t) + np.sin(10*np.sqrt(2)*t)
+rc = KURAMOTO_RC(n=100, dt=1)
 
-rc = KURAMOTO_RC()
+dt = 1
 
-dt = 0.01
-
-washout = 240
-train = 32
-test = 32
-timeSec = washout + train + test # 240s for training, 32s for training, 32s for testing
+washout = 100
+train = 900
+test = 500
+timeSec = washout + train + test 
 time = np.arange(0, timeSec, dt)
 
-inputs = lowhighSin(time)
-rc.batch_update(inputs[:int(washout/dt)])
+train_data, test_data = create_narma10_dataset(train_samples=int((washout+train)/dt), test_samples=int(test/dt), seed=42)
 
-ts = lowhighSin(time + 100)
-xs = rc.batch_update(inputs[int(washout/dt):int((washout+train)/dt)])
-rc.ridge(xs, ts[int((washout)/dt):int((washout+train)/dt)])
+rc.batch_update(train_data['input'][:int(washout/dt)])
 
-pred = rc.batch_update(inputs[int((washout+train)/dt):]) @ rc.wout
+xs = rc.batch_update(train_data['input'][int(washout/dt):int((washout+train)/dt)])
+rc.ridge(xs, train_data['target'][int(washout/dt):int((washout+train)/dt)])
+
+pred = rc.batch_update(test_data['input']) @ rc.wout
 
 #pred = np.zeros(test)
+mse = np.sum((test_data['target'] - pred)**2) / pred.shape[0]
+rmse = np.sqrt(mse)
 
-acc = np.sum((ts[int((washout+train)/dt):] - pred)**2) / pred.shape[0]
+target_std = np.std(test_data['target'])
+nrmse = rmse / target_std
 
-print("MSE", acc)
+print("MSE", mse)
+print("RMSE", rmse)
+print("NRMSE", nrmse)
 
 plt.plot(pred)
-plt.plot(ts[int((washout+train)/dt):int((washout+train+test)/dt)+pred.shape[0]])
+plt.plot(test_data['target'])
 plt.show()
