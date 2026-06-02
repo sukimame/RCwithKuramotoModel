@@ -10,8 +10,8 @@ class KURAMOTO:
 
         rng = np.random.default_rng()
         #self.omega = np.random.normal(0.2, 0.2, n)
-        #self.omega = np.random.uniform(-0.3, 0.7, n)
-        self.omega = np.linspace(6.5, 8.5, n)
+        self.omega = np.random.uniform(-0.3, 0.7, n)
+        #self.omega = np.linspace(6.5, 8.5, n)
         self.theta = 2 * np.pi * rng.random(n)
 
     def updateDiff(self):

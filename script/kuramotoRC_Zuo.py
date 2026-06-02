@@ -1,4 +1,3 @@
-from kuramoto import KURAMOTO
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,44 +8,98 @@ def adjust_spectral_radius(w, target_radius=1.1):
     spectral_radius = np.max(np.abs(eigenvalues))
     scaling_factor = target_radius / spectral_radius
     adjusted_w = w * scaling_factor
-    
+
     return adjusted_w
 
-class KURAMOTO_RC:
-    def __init__(self, n=100, dt=1.0):
-        self.wout = np.ones(n+1)
-        self.model = KURAMOTO(n, k=0.65, dt=dt, alpha=1.0)
+class KURAMOTO_RC_ZUO:
+    def __init__(
+            self, 
+            n, 
+            dt=1.0, 
+            alpha=1.0, 
+            lambda_=4.0, 
+            radius=1.1,
+            epsilon=0.1,
+            beta=np.pi/2
+            ): 
+        
+        self.dt = dt
         self.n = n
+        self.alpha = alpha
+        self.lambda_ = lambda_
+        self.radius = radius
+        self.epsilon = epsilon
+        self.beta = beta
 
-        #接続重み　論文中でスパースさが精度にそこまで影響していないことが示されている
-        self.k = np.random.uniform(-1, 1, (n, n))
-        self.k = self.k * (np.ones((n, n)) - np.eye(n))
-        self.k = adjust_spectral_radius(self.k)
+        rng = np.random.default_rng()
+        #self.omega = rng.uniform(-0.2, 0.6, n)
+        self.omega = rng.normal(0.5,0.5,n)
+        self.theta = np.zeros(n)
 
-        self.omega = self.model.omega
-        self.dt = self.model.dt
-        self.lambda_ = 4.0
-    
+        self.wout = np.ones(2*n+1)
+        
+        self.mask = (np.random.rand(n, n) < 1).astype(float)
+        self.mask *= (1 - np.eye(n))
+        #self.k = rng.uniform(0, 1, (n, n)) * self.mask
+        self.k = np.ones((n, n))*0.7 * self.mask
+
+    def updateDiff(self):
+        # theta_j (列) - theta_i (行) にすることで、sin(theta_j - theta_i) になる
+        return self.theta[np.newaxis, :] - self.theta[:, np.newaxis]
+
     def updateTheta(self, u=0):
-        d_theta =  self.omega + self.lambda_ * np.sum(self.k * np.sin(self.model.updateDiff() + self.model.alpha*u), axis=1)
-        self.model.theta = (self.model.theta + self.dt * d_theta) % (2*np.pi)
+        d_theta =  self.omega + self.lambda_ * np.sum(self.k * np.sin(self.updateDiff() + self.alpha*u), axis=1)
+        self.theta = (self.theta + self.dt * d_theta) #% 2*np.pi
 
-    def batch_update(self, inputs):
-        xs = np.zeros((inputs.shape[-1], self.n+1))
-        xs[:, 0] = 1
+    def updateK(self):
+        self.d_k = -self.epsilon * np.sin(self.updateDiff() + self.beta)
+        self.k = self.k + self.dt * self.d_k
+        self.k[self.k<-1] = -1
+        self.k[self.k>1] = 1
+        self.k *= self.mask
+        self.k = adjust_spectral_radius(self.k, target_radius=self.radius)
+        #print(np.mean(self.k), np.std(self.k))
+
+    def washout(self, inputs):
         for i, u in enumerate(inputs):
             self.updateTheta(u)
-            xs[i, 1:] = np.sin(self.model.theta)
+            #self.updateK()
 
-        return xs
+    def batch_update(self, inputs):
+        xs = np.zeros((inputs.shape[-1], 2*self.n+1))
+        xs[:, 0] = 1
 
+        op = []
+        for i, u in enumerate(inputs):
+            self.updateTheta(u)
+            xs[i, 1:self.n+1] = np.sin(self.theta)
+            xs[i, self.n+1:] = np.cos(self.theta)
+            x, y = self.orderParam(1)
+            #print(np.sqrt(x**2+y**2))
+            op.append(np.sqrt(x**2+y**2))
+
+        return xs, op
+    
     def ridge(self, xs, ts):
         self.wout = np.linalg.pinv(xs.T @ xs + 1e-3 * np.eye(xs.shape[1])) @ xs.T @ ts
 
+    def orderParam(self, n=1):
+        x = np.mean(np.sin(self.theta * n))
+        y = np.mean(np.cos(self.theta * n))
+        return x, y
+
+
 if __name__=="__main__":
 
-    rc = KURAMOTO_RC(n=100, dt=1)
     dt = 1
+    rc = KURAMOTO_RC_ZUO(
+            n=100,
+            dt=dt,
+            alpha=0.01,
+            lambda_=0.01,
+            radius=1.5,
+            epsilon=0.1,
+            beta=np.pi/2)
 
     washout = 100
     train = 900
@@ -54,26 +107,29 @@ if __name__=="__main__":
     timeSec = washout + train + test 
     time = np.arange(0, timeSec, dt)
 
-    train_data, test_data = create_narma10_dataset(train_samples=int((washout+train)/dt), test_samples=int(test/dt), seed=42)
+    data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=42)
 
-    rc.batch_update(train_data['input'][:int(washout/dt)])
+    rc.washout(data['input'][:int(washout/dt)])
 
-    xs = rc.batch_update(train_data['input'][int(washout/dt):int((washout+train)/dt)])
-    rc.ridge(xs, train_data['target'][int(washout/dt):int((washout+train)/dt)])
+    xs, op = rc.batch_update(data['input'][int(washout/dt):int((washout+train)/dt)])
+    rc.ridge(xs, data['target'][int(washout/dt):int((washout+train)/dt)])
 
-    pred = rc.batch_update(test_data['input']) @ rc.wout
+    pred = rc.batch_update(data['input'][int((washout+train)/dt):]) @ rc.wout
 
-    #pred = np.zeros(test)
-    mse = np.sum((test_data['target'] - pred)**2) / pred.shape[0]
+    mse = np.sum((data['target'][int((washout+train)/dt):] - pred)**2) / pred.shape[0]
     rmse = np.sqrt(mse)
 
-    target_std = np.std(test_data['target'])
+    target_std = np.std(data['target'][int((washout+train)/dt):])
     nrmse = rmse / target_std
 
-    print("MSE", mse)
-    print("RMSE", rmse)
-    print("NRMSE", nrmse)
+    print(np.mean(rc.theta % 2*np.pi), np.std(rc.theta % 2*np.pi))
 
-    plt.plot(pred)
-    plt.plot(test_data['target'])
+    print(f"MSE: {mse:.4f}")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"NRMSE: {nrmse:.4f}")    
+
+    #plt.plot(pred)
+    #plt.plot(data['target'][int((washout+train)/dt):], alpha=0.5)
+    plt.plot(op)
+    plt.legend()
     plt.show()
