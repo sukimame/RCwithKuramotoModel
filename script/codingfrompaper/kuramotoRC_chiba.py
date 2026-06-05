@@ -1,4 +1,4 @@
-from kuramoto import KURAMOTO
+from script.codingfrompaper.kuramoto import KURAMOTO
 import numpy as np
 import matplotlib.pyplot as plt
 
