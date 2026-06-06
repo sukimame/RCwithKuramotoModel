@@ -2,28 +2,36 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def generate_narma10(n_samples, seed=None):
+
+    n=10
     if seed is not None:
         np.random.seed(seed)
     
     # Generate random input uniformly distributed in [0, 0.5]
-    u = np.random.uniform(0, 0.5, n_samples + 10)
+    u = np.random.uniform(0, 0.5, n_samples + n)
     
     # Initialize output
-    y = np.zeros(n_samples + 10)
+    y = np.zeros(n_samples + n)
     
     # Generate NARMA-10 sequence
-    for t in range(10, n_samples + 10):
+    for t in range(n, n_samples + n):
         # Sum of past 10 outputs
-        sum_y = np.sum(y[t-10:t])
+        sum_y = np.sum(y[t-n:t])
         
+        """
         # NARMA-10 equation
         y[t] = (0.3 * y[t-1] + 
                 0.05 * y[t-1] * sum_y + 
-                1.5 * u[t-10] * u[t-1] + 
+                1.5 * u[t-n] * u[t-1] + 
                 0.1)
-    
+        """
+        
+
+        y[t] = 0.1 * np.sum(u[t-10:t])
+        #y[t] = u[t-1]
+
     # Return only the relevant portion (skip first 10 timesteps used for initialization)
-    return u[10:], y[10:]
+    return u[n:], y[n:]
 
 
 def create_narma10_dataset(train_samples=5000, test_samples=1000, seed=42):

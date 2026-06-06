@@ -1,21 +1,18 @@
-from kuramotoRCEx import KURAMOTORCEX
+from kuramotoRCEXRK4 import KURAMOTORCEX
 import matplotlib.pyplot as plt
 import numpy as np
 
 def RandomInput(n, delay):
-    seed = 42
-    np.random.seed(seed)
-
-    # Generate random input uniformly distribu
-    data = np.random.uniform(0, 0.6, n + delay)
-    return data[:-delay], data[delay:]
+    np.random.seed(42)
+    data = np.random.uniform(0, 0.6, n)
+    return data[delay:], data[:-delay]
 
 dt = 0.01
 rc = KURAMOTORCEX(
         n=100,
         dt=dt,
         alpha=0.01,
-        K=0.65,
+        K=1,
         s=1
         )
 print(rc.k)

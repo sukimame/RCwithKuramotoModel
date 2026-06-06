@@ -27,7 +27,6 @@ class KURAMOTORCEX:
 
         self.omega = rng.normal(0.2, 0.2, n)
         #self.omega = np.random.uniform(-0.3, 0.7, n)
-        #self.omega = np.linspace(6.5, 8.5, n)
         self.theta = rng.uniform(0, 2*np.pi, n)
         self.d_theta = np.zeros(n)
 
@@ -35,16 +34,30 @@ class KURAMOTORCEX:
 
         self.mask = (np.random.rand(n, n) < s).astype(float)
         self.mask *= (1 - np.eye(n))
-        #self.k = rng.uniform(0, 1, (n, n)) * self.mask
         self.k = np.ones((n, n)) * K/n * self.mask
+        #self.k = rng.uniform(0, 1, (n, n)) * self.mask
+        #self.k = rng.normal(0.5, 0.5, (n, n)) * self.mask
 
-    def updateDiff(self):
-        # theta_j (列) - theta_i (行) にすることで、sin(theta_j - theta_i) になる
-        return self.theta[np.newaxis, :] - self.theta[:, np.newaxis] 
+    # --- 新規追加: 任意の位相状態(theta_state)における変化率 dy/dt を計算する関数 ---
+    def _calc_dtheta(self, theta_state, u):
+        # 差分行列 (N, N) を作成
+        diff = theta_state[np.newaxis, :] - theta_state[:, np.newaxis] 
+        # d_theta/dt を計算して返す
+        return self.omega + self.lambda_ * np.sum(self.k * np.sin(diff + self.alpha * u), axis=1)
 
+    # --- 変更: RK4による状態更新 ---
     def updateTheta(self, u=0):
-        self.d_theta = self.omega + self.lambda_ * np.sum(self.k * np.sin(self.updateDiff() + self.alpha*u), axis=1)
-        self.theta = (self.gamma * self.theta + self.dt * self.d_theta)# % 2*np.pi
+        # RK4の4ステップ計算
+        k1 = self._calc_dtheta(self.theta, u)
+        k2 = self._calc_dtheta(self.theta + 0.5 * self.dt * k1, u)
+        k3 = self._calc_dtheta(self.theta + 0.5 * self.dt * k2, u)
+        k4 = self._calc_dtheta(self.theta + self.dt * k3, u)
+        
+        # このステップにおける平均的な位相の変化量（速度）
+        self.d_theta = (k1 + 2*k2 + 2*k3 + k4) / 6.0
+        
+        # 位相の更新 (元のコードの gamma を乗算する仕様を残しています)
+        self.theta = self.gamma * self.theta + self.dt * self.d_theta
     
     def orderParam(self, n=1):
         x = np.mean(np.sin(self.theta * n))
@@ -53,7 +66,7 @@ class KURAMOTORCEX:
 
     def washout(self, inputs):
         x, y = self.orderParam(1)
-        print(np.sqrt(x**2+y**2))
+        print(f"Washout start order parameter: {np.sqrt(x**2+y**2):.4f}")
         for i, u in enumerate(inputs):
             self.updateTheta(u)
 
@@ -63,45 +76,35 @@ class KURAMOTORCEX:
 
         for i, u in enumerate(inputs):
             self.updateTheta(u)
-            #xs[i, 1:self.n+1] = np.sin(self.theta)
-            #xs[i, self.n+1:] = np.cos(self.theta)
-            xs[i, 1:] = self.d_theta * int(1/self.dt) #- self.omega
+            # RK4で求めた正確な d_theta を特徴量として使用する
+            xs[i, 1:] = self.d_theta * int(1/self.dt) - self.omega
+            
         x, y = self.orderParam(1)
-        print(np.sqrt(x**2+y**2))
+        print(f"Batch end order parameter: {np.sqrt(x**2+y**2):.4f}")
           
         return xs
     
     def ridge(self, xs, ts):
-        self.wout = np.linalg.pinv(xs.T @ xs + 1e-7 * np.eye(xs.shape[1])) @ xs.T @ ts
-    
-    """
-    def ridge(self, xs, ts):
-        #self.wout = np.linalg.pinv(xs) @ ts
-        self.wout = np.linalg.pinv(xs.T @ xs + 1e-2 * np.eye(xs.shape[1])) @ xs.T @ ts
-    """
+        self.wout = np.linalg.pinv(xs.T @ xs + 1e-10 * np.eye(xs.shape[1])) @ xs.T @ ts
 
-    def orderParam(self, n=1):
-        x = np.mean(np.sin(self.theta * n))
-        y = np.mean(np.cos(self.theta * n))
-        return x, y
 
 if __name__=="__main__":
     dt = 0.01
     rc = KURAMOTORCEX(
             n=100,
             dt=dt,
-            alpha=0.01,
-            K=0.6,
+            alpha=0.1,
+            K=1,
             s=1
             )
 
-    washout = 100
-    train = 5
-    test = 100
+    washout = 200
+    train = 10
+    test = 5
     timeSec = washout + train + test 
     time = np.arange(0, timeSec, dt)
 
-    data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=42)
+    data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=24)
 
     rc.washout(data['input'][:int(washout/dt)])
 
@@ -126,7 +129,6 @@ if __name__=="__main__":
     print("std, pred and target", np.std(pred), target_std)
 
     print(np.median(rc.wout), np.std(rc.wout))
-
 
     fig = plt.figure()
     ax1 = fig.add_subplot(111)
