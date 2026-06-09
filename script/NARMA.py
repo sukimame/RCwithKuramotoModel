@@ -18,21 +18,19 @@ def generate_narma10(n_samples, seed=None):
         # Sum of past 10 outputs
         sum_y = np.sum(y[t-n:t])
         
-        """
         # NARMA-10 equation
         y[t] = (0.3 * y[t-1] + 
                 0.05 * y[t-1] * sum_y + 
                 1.5 * u[t-n] * u[t-1] + 
                 0.1)
-        """
         
-
-        y[t] = 0.1 * np.sum(u[t-10:t])
+        
+        #y[t] = np.sum(u[t-10:t])/n
+                
         #y[t] = u[t-1]
 
     # Return only the relevant portion (skip first 10 timesteps used for initialization)
     return u[n:], y[n:]
-
 
 def create_narma10_dataset(train_samples=5000, test_samples=1000, seed=42):
     # Generate training data

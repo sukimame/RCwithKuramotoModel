@@ -15,13 +15,14 @@ class KURAMOTORCEX:
             alpha=0.01, 
             K = 0.7,
             s=1,
-            gamma=1
+            gamma=1,
+            lambda_=1
         ): 
         self.n = n  
         self.dt = dt
         self.alpha = alpha
         self.gamma = gamma
-        self.lambda_=1
+        self.lambda_ = lambda_
 
         rng = np.random.default_rng()
 
@@ -34,16 +35,16 @@ class KURAMOTORCEX:
 
         self.mask = (np.random.rand(n, n) < s).astype(float)
         self.mask *= (1 - np.eye(n))
-        self.k = np.ones((n, n)) * K/n * self.mask
-        #self.k = rng.uniform(0, 1, (n, n)) * self.mask
-        #self.k = rng.normal(0.5, 0.5, (n, n)) * self.mask
+        #self.k = np.ones((n, n)) * K/n * self.mask
+        self.k = rng.uniform(0, 1, (n, n)) * self.mask
+        #self.k = rng.normal(0.6, 0.4, (n, n)) * self.mask
 
     # --- 新規追加: 任意の位相状態(theta_state)における変化率 dy/dt を計算する関数 ---
     def _calc_dtheta(self, theta_state, u):
         # 差分行列 (N, N) を作成
         diff = theta_state[np.newaxis, :] - theta_state[:, np.newaxis] 
         # d_theta/dt を計算して返す
-        return self.omega + self.lambda_ * np.sum(self.k * np.sin(diff + self.alpha * u), axis=1)
+        return self.omega + self.lambda_ * np.sum(self.k * np.sin(diff + self.alpha * u), axis=1) #+ 0.1*u
 
     # --- 変更: RK4による状態更新 ---
     def updateTheta(self, u=0):
@@ -66,7 +67,7 @@ class KURAMOTORCEX:
 
     def washout(self, inputs):
         x, y = self.orderParam(1)
-        print(f"Washout start order parameter: {np.sqrt(x**2+y**2):.4f}")
+        #print(f"Washout start order parameter: {np.sqrt(x**2+y**2):.4f}")
         for i, u in enumerate(inputs):
             self.updateTheta(u)
 
@@ -80,12 +81,12 @@ class KURAMOTORCEX:
             xs[i, 1:] = self.d_theta * int(1/self.dt) - self.omega
             
         x, y = self.orderParam(1)
-        print(f"Batch end order parameter: {np.sqrt(x**2+y**2):.4f}")
+        #print(f"Batch end order parameter: {np.sqrt(x**2+y**2):.4f}")
           
         return xs
     
     def ridge(self, xs, ts):
-        self.wout = np.linalg.pinv(xs.T @ xs + 1e-10 * np.eye(xs.shape[1])) @ xs.T @ ts
+        self.wout = np.linalg.pinv(xs.T @ xs + 1e-4 * np.eye(xs.shape[1])) @ xs.T @ ts
 
 
 if __name__=="__main__":
@@ -100,7 +101,7 @@ if __name__=="__main__":
 
     washout = 200
     train = 10
-    test = 5
+    test = 10
     timeSec = washout + train + test 
     time = np.arange(0, timeSec, dt)
 
@@ -130,6 +131,7 @@ if __name__=="__main__":
 
     print(np.median(rc.wout), np.std(rc.wout))
 
+
     fig = plt.figure()
     ax1 = fig.add_subplot(111)
     ax1.plot(pred)
@@ -137,4 +139,5 @@ if __name__=="__main__":
 
     plt.legend()
     plt.show()
+
 

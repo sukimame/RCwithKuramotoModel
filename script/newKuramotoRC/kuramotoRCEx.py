@@ -40,7 +40,8 @@ class KURAMOTORCEX:
 
     def updateDiff(self):
         # theta_j (列) - theta_i (行) にすることで、sin(theta_j - theta_i) になる
-        return self.theta[np.newaxis, :] - self.theta[:, np.newaxis] 
+        return self.theta[np.newaxis, :] - self.theta[:, np.newaxis]
+    
 
     def updateTheta(self, u=0):
         self.d_theta = self.omega + self.lambda_ * np.sum(self.k * np.sin(self.updateDiff() + self.alpha*u), axis=1)
@@ -97,7 +98,7 @@ if __name__=="__main__":
 
     washout = 100
     train = 5
-    test = 100
+    test = 200
     timeSec = washout + train + test 
     time = np.arange(0, timeSec, dt)
 
