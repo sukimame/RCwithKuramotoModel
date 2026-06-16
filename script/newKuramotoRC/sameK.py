@@ -94,3 +94,4 @@ for k, l in enumerate(Ls):
             print(f"{count}/{total}")
 
 np.save('/Users/kondolab/myRepos/RCwithKuramotoModel/expData/sameK_June7_L_lambda_omega_sdlog', data)
+

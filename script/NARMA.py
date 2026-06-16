@@ -24,7 +24,6 @@ def generate_narma10(n_samples, seed=None):
                 1.5 * u[t-n] * u[t-1] + 
                 0.1)
         
-        
         #y[t] = np.sum(u[t-10:t])/n
                 
         #y[t] = u[t-1]

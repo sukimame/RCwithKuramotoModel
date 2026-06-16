@@ -6,7 +6,7 @@ from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 
 # ── データ読み込み ────────────────────────────────────────────────
-df = pd.read_csv("to_csv_out_June9.csv")  # ファイル名は適宜変更
+df = pd.read_csv("csvData/to_csv_out_June10_4.csv")  # ファイル名は適宜変更
 delays = list(range(1, 21))  # 1〜20
 
 # ── カラーマップ（カスタム） ──────────────────────────────────────
@@ -127,7 +127,7 @@ cbar.outline.set_edgecolor("#2a2a2a")
 
 # ── 保存 & 表示 ───────────────────────────────────────────────────
 plt.savefig(
-    "nrmse_heatmaps_June9.png",
+    "nrmse_heatmaps_June9_3.png",
     dpi=180,
     bbox_inches="tight",
     facecolor=fig.get_facecolor(),

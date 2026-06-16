@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from NARMA import create_narma10_dataset
+from MovingAvg import create_ma_dataset
 
 class KURAMOTORCEX:
     def __init__(
@@ -26,7 +27,7 @@ class KURAMOTORCEX:
 
         rng = np.random.default_rng()
 
-        self.omega = rng.normal(0.2, 0.2, n)
+        self.omega = rng.normal(0.2, 1.0, n)
         #self.omega = np.random.uniform(-0.3, 0.7, n)
         self.theta = rng.uniform(0, 2*np.pi, n)
         self.d_theta = np.zeros(n)
@@ -36,7 +37,7 @@ class KURAMOTORCEX:
         self.mask = (np.random.rand(n, n) < s).astype(float)
         self.mask *= (1 - np.eye(n))
         #self.k = np.ones((n, n)) * K/n * self.mask
-        self.k = rng.uniform(0, 1, (n, n)) * self.mask
+        self.k = rng.uniform(0, K, (n, n)) * self.mask
         #self.k = rng.normal(0.6, 0.4, (n, n)) * self.mask
 
     # --- 新規追加: 任意の位相状態(theta_state)における変化率 dy/dt を計算する関数 ---
@@ -95,7 +96,7 @@ if __name__=="__main__":
             n=100,
             dt=dt,
             alpha=0.1,
-            K=1,
+            K=6,
             s=1
             )
 
@@ -106,6 +107,7 @@ if __name__=="__main__":
     time = np.arange(0, timeSec, dt)
 
     data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=24)
+    #data, _ = create_ma_dataset(train_samples=int((timeSec)/dt), test_samples=1, window_size=10, seed=24)
 
     rc.washout(data['input'][:int(washout/dt)])
 
@@ -120,21 +122,23 @@ if __name__=="__main__":
 
     target_std = np.std(data['target'][int((washout+train)/dt):])
     nrmse = rmse / target_std
+    nmse = mse / np.var(data['target'][int((washout+train)/dt):])
 
     print(np.mean(rc.theta % 2*np.pi), np.std(rc.theta % 2*np.pi))
     print(f"MSE: {mse:.4f}")
     print(f"RMSE: {rmse:.4f}")
     print(f"NRMSE: {nrmse:.4f}")
+    print(f"NMSE: {nmse:.4f}")
 
     print("mean, pred and target", np.mean(pred), np.mean(data['target'][int((washout+train)/dt):]))
     print("std, pred and target", np.std(pred), target_std)
 
     print(np.median(rc.wout), np.std(rc.wout))
 
-
+    
     fig = plt.figure()
     ax1 = fig.add_subplot(111)
-    ax1.plot(pred)
+    ax1.plot(pred, label="pred")
     ax1.plot(data['target'][int((washout+train)/dt):], alpha=0.5)
 
     plt.legend()

@@ -8,9 +8,9 @@ from kuramotoRCEXRK4 import KURAMOTORCEX
 def RandomInput(n, delay, seed=24):
     np.random.seed(seed)
     raw = np.random.uniform(0, 0.5, n)
-    return raw[delay:], raw[:-delay]
+    return raw[delay:], raw[:-delay]  # 修正：正しい向き
 
-def gridSearch(k_scale, omega, delay):  # lambda_ → k_scale に変更
+def gridSearch(k_scale, delay):
     dt = 0.01
     rc = KURAMOTORCEX(
         n=100,
@@ -18,10 +18,10 @@ def gridSearch(k_scale, omega, delay):  # lambda_ → k_scale に変更
         alpha=0.01,
         K=1,
         s=1,
-        lambda_=1  # lambda_ は固定（不要なら引数から削除可）
+        lambda_=1
     )
-    rc.omega = omega
-    rc.k = rng.uniform(0, k_scale, (100, 100)) * rc.mask  # 0〜k_scale に変更
+    rc.omega = np.full(100, 0.2)  # sd不要なので均一固定
+    rc.k = rng.uniform(0, k_scale, (100, 100)) * rc.mask
 
     washout = 200
     train = 10
@@ -44,33 +44,20 @@ def gridSearch(k_scale, omega, delay):  # lambda_ → k_scale に変更
     x, y = rc.orderParam(1)
     return nrmse, np.median(rc.wout), np.sqrt(x**2+y**2)
 
-delays = list(range(1, 21))  # 1〜20ステップ
+delays = list(range(1, 21))
+k_scales = np.round(np.linspace(0, 20, 161), 4).tolist()  # 0〜10を21段階
 
-k_scales = np.round(np.linspace(0, 1, 11), 4).tolist()   # 0を含む0〜1の11段階
-log_sds = np.round(np.logspace(np.log10(0.05), np.log10(1), 7), 4).tolist()
-sds = [0] + log_sds  # 8値に増やす
-
-length = len(delays) * len(k_scales) * len(sds)  # Ls バグも修正
-data = np.zeros((length, 6))
+length = len(delays) * len(k_scales)
+data = np.zeros((length, 5))
 rng = np.random.default_rng()
 
-omegaDict = {}
-omegaDict[0] = np.full(100, 0.2)
-for j, sd in enumerate(sds[1:]):
-    omegaDict[sd] = rng.normal(0.2, sd, 100)
-
 for k, delay in enumerate(delays):
-    for i, k_scale in enumerate(k_scales):  # lambda_ → k_scale
-        for j, sd in enumerate(sds):
-            nrmse, woutMed, R1 = gridSearch(k_scale, omegaDict[sd], delay)
-            idx = (
-                len(k_scales) * len(sds) * k
-                + len(sds) * i
-                + j
-            )
-            data[idx] = np.array([delay, k_scale, sd, nrmse, woutMed, R1])
-            total = len(delays) * len(k_scales) * len(sds)
-            count = idx + 1
-            print(f"{count}/{total}")
+    for i, k_scale in enumerate(k_scales):
+        nrmse, woutMed, R1 = gridSearch(k_scale, delay)
+        idx = len(k_scales) * k + i
+        data[idx] = np.array([delay, k_scale, nrmse, woutMed, R1])
+        total = len(delays) * len(k_scales)
+        count = idx + 1
+        print(f"{count}/{total}")
 
-np.save('/Users/kondolab/myRepos/RCwithKuramotoModel/expData/differentK_June9_delay_omega_sdlog', data)
+np.save('/Users/kondolab/myRepos/RCwithKuramotoModel/expData/differentK_June10_kscale20_delay', data)
