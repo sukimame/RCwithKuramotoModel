@@ -7,6 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from NARMA import create_narma10_dataset
 from MovingAvg import create_ma_dataset
+from MackeyGlass import create_mackey_glass_dataset
+from DelayTask import create_delay_dataset
 
 class KURAMOTORCEX:
     def __init__(
@@ -17,13 +19,17 @@ class KURAMOTORCEX:
             K = 0.7,
             s=1,
             gamma=1,
-            lambda_=1
+            lambda_=1,
+            epsilon=0.01,
+            beta=-np.pi/2+0.1,
         ): 
         self.n = n  
         self.dt = dt
         self.alpha = alpha
         self.gamma = gamma
         self.lambda_ = lambda_
+        self.epsilon = epsilon
+        self.beta = beta
 
         rng = np.random.default_rng()
 
@@ -37,8 +43,10 @@ class KURAMOTORCEX:
         self.mask = (np.random.rand(n, n) < s).astype(float)
         self.mask *= (1 - np.eye(n))
         #self.k = np.ones((n, n)) * K/n * self.mask
-        self.k = rng.uniform(0, K, (n, n)) * self.mask
+        #self.k = rng.uniform(0, K, (n, n)) * self.mask
         #self.k = rng.normal(0.6, 0.4, (n, n)) * self.mask
+
+        self.k = rng.uniform(-1, 1, (n, n)) * self.mask
 
     # --- 新規追加: 任意の位相状態(theta_state)における変化率 dy/dt を計算する関数 ---
     def _calc_dtheta(self, theta_state, u):
@@ -61,6 +69,34 @@ class KURAMOTORCEX:
         # 位相の更新 (元のコードの gamma を乗算する仕様を残しています)
         self.theta = self.gamma * self.theta + self.dt * self.d_theta
     
+    def updateK(self, u):
+        diff = self.theta[np.newaxis, :] - self.theta[:, np.newaxis]  # 位相差
+        d_k = -self.epsilon * np.sin(diff + self.beta)
+        self.k = self.k + self.dt * d_k
+
+        # クリッピング |k_ij| <= 1
+        self.k = np.clip(self.k, -1, 1)
+        self.k *= self.mask
+
+    def plot_k_dist(self, bins=50):
+        k_vals = self.k[self.mask.astype(bool)]  # マスクで存在するエッジのみ
+        _, axes = plt.subplots(1, 2, figsize=(11, 4))
+
+        axes[0].hist(k_vals, bins=bins, color="steelblue", edgecolor="white", linewidth=0.4)
+        axes[0].set_xlabel("k_ij")
+        axes[0].set_ylabel("count")
+        axes[0].set_title(f"k distribution  (n_edges={len(k_vals)}, mean={k_vals.mean():.3f}, std={k_vals.std():.3f})")
+
+        im = axes[1].imshow(self.k, aspect="auto", cmap="RdBu_r",
+                            vmin=-np.abs(self.k).max(), vmax=np.abs(self.k).max())
+        plt.colorbar(im, ax=axes[1], label="k_ij")
+        axes[1].set_xlabel("j (source)")
+        axes[1].set_ylabel("i (target)")
+        axes[1].set_title("k matrix")
+
+        plt.tight_layout()
+        plt.show()
+
     def orderParam(self, n=1):
         x = np.mean(np.sin(self.theta * n))
         y = np.mean(np.cos(self.theta * n))
@@ -71,6 +107,7 @@ class KURAMOTORCEX:
         #print(f"Washout start order parameter: {np.sqrt(x**2+y**2):.4f}")
         for i, u in enumerate(inputs):
             self.updateTheta(u)
+            #self.updateK(u=u)
 
     def batch_update(self, inputs):
         xs = np.zeros((inputs.shape[-1], self.n+1))
@@ -96,7 +133,7 @@ if __name__=="__main__":
             n=100,
             dt=dt,
             alpha=0.1,
-            K=6,
+            K=1,
             s=1
             )
 
@@ -106,8 +143,10 @@ if __name__=="__main__":
     timeSec = washout + train + test 
     time = np.arange(0, timeSec, dt)
 
-    data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=24)
+    #data, _ = create_narma10_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=24)
     #data, _ = create_ma_dataset(train_samples=int((timeSec)/dt), test_samples=1, window_size=10, seed=24)
+    data, _ = create_mackey_glass_dataset(train_samples=int((timeSec)/dt), test_samples=1, seed=24)
+    #data, _ = create_delay_dataset(int((timeSec)/dt), delay=5, seed=24)
 
     rc.washout(data['input'][:int(washout/dt)])
 
@@ -134,6 +173,7 @@ if __name__=="__main__":
     print("std, pred and target", np.std(pred), target_std)
 
     print(np.median(rc.wout), np.std(rc.wout))
+    rc.plot_k_dist(bins=50)
 
     
     fig = plt.figure()
